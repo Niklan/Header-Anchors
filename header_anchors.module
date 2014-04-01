@@ -1,0 +1,176 @@
+<?php
+/**
+ * @file
+ *  Main file of the module.
+ */
+
+/**
+ * Implements hook_filter_info().
+ */
+function header_anchors_filter_info() {
+  $filters['filter_header_anchors'] = array(
+    'title' => 'Header anchors',
+    'description' => 'None',
+    'prepare callback' => '_header_anchors_filter_prepare',
+    'process callback' => '_header_anchors_filter_process',
+    'settings callback' => '_header_anchors_filter_settings',
+    'tips callback' => '_header_anchors_filter_tips',
+  );
+  return $filters;
+}
+
+/**
+ * Prepare text to filtering.
+ */
+function _header_anchors_filter_prepare($text, $filter) {
+  $position = isset($filter->settings['position']) ? $filter->settings['position'] : 1;
+  $link_position = isset($filter->settings['anchor_link_position']) ? $filter->settings['anchor_link_position'] : 0;
+
+  $html = new simple_html_dom();
+  $html->load($text);
+
+  foreach($html->find('h1,h2,h3,h4,h5,h6') as $header) {
+    switch ($filter->settings['anchor_preprocessor']) {
+      case 1:
+        $header_title = header_anchors_replace_spaces($header->plaintext, $filter->settings['anchor_preprocessor_space']);
+        break;
+      case 2:
+        $header_title = substr(md5($header->plaintext), 0, $filter->settings['anchor_preprocessor_md5']);
+        break;
+      default:
+        $header_title = $header->plaintext;
+    }
+
+    switch ($position) {
+      case 1:
+        $header->innertext = "<span id='{$header_title}'>" . $header->innertext . "</span>";
+        break;
+      case 2:
+        $header->outertext = "<span id='{$header_title}'></span>" . $header->outertext;
+        break;
+      case 3:
+        $header->outertext = $header->outertext . "<span id='{$header_title}'></span>";
+        break;
+    }
+
+    switch ($link_position) {
+      case 1:
+        $header->outertext = header_anchors_prepare_link($filter->settings['anchor_link_element'], '#'.$header_title) . $header->outertext;
+        break;
+      case 2:
+        $header->outertext = $header->outertext . header_anchors_prepare_link($filter->settings['anchor_link_element'], '#'.$header_title);
+        break;
+    }
+  }
+
+  $html->save();
+  return $html;
+}
+
+/**
+ * Return prepared text.
+ */
+function _header_anchors_filter_process($text, $filter) {
+  return $text;
+}
+
+/**
+ * Settings for filter.
+ */
+function _header_anchors_filter_settings($form, &$form_state, $filter, $format, $defaults, $filters) {
+  $settings['position'] = array(
+    '#type' => 'radios',
+    '#title' => t('Anchor position'),
+    '#default_value' => isset($filter->settings['position']) ? $filter->settings['position'] : 1,
+    '#options' => array(
+      1 => t('Inside element'),
+      2 => t('Before element'),
+      3 => t('After element'),
+    ),
+  );
+
+  $settings['anchor_preprocessor'] = array(
+    '#type' => 'radios',
+    '#title' => t('Anchor name preprocess'),
+    '#default_value' => isset($filter->settings['anchor_preprocessor']) ? $filter->settings['anchor_preprocessor'] : 0,
+    '#options' => array(
+      0 => t('- none -'),
+      1 => t('Replace spaces'),
+      2 => t('MD5 replace'),
+    ),
+  );
+
+  $settings['anchor_preprocessor_space'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Replace space by character'),
+    '#default_value' => isset($filter->settings['anchor_preprocessor_space']) ? $filter->settings['anchor_preprocessor_space'] : '_',
+    '#size' => 60,
+    '#maxlength' => 128,
+    '#states' => array(
+      'visible' => array(
+        ':input[name="filters[filter_header_anchors][settings][anchor_preprocessor]"]' => array('value' => 1),
+      ),
+      'required' => array(
+        ':input[name="filters[filter_header_anchors][settings][anchor_preprocessor]"]' => array('value' => 1),
+      ),
+    ),
+  );
+
+  $settings['anchor_preprocessor_md5'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Cut MD5 sum'),
+    '#default_value' => isset($filter->settings['anchor_preprocessor_md5']) ? $filter->settings['anchor_preprocessor_md5'] : '5',
+    '#size' => 60,
+    '#maxlength' => 128,
+    '#states' => array(
+      'visible' => array(
+        ':input[name="filters[filter_header_anchors][settings][anchor_preprocessor]"]' => array('value' => 2),
+      ),
+      'required' => array(
+        ':input[name="filters[filter_header_anchors][settings][anchor_preprocessor]"]' => array('value' => 2),
+      ),
+    ),
+  );
+
+  $settings['anchor_link_position'] = array(
+    '#type' => 'radios',
+    '#title' => t('Anchor link position'),
+    '#default_value' => isset($filter->settings['anchor_link_position']) ? $filter->settings['anchor_link_position'] : 0,
+    '#options' => array(
+      0 => t('Do not add anchor link'),
+      1 => t('Before element'),
+      2 => t('After element'),
+    ),
+  );
+
+  $settings['anchor_link_element'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Link element'),
+    '#default_value' => isset($filter->settings['anchor_link_element']) ? $filter->settings['anchor_link_element'] : '<a href="@anchor">Anchor</a>',
+    '#size' => 60,
+    '#maxlength' => 128,
+  );
+
+  return $settings;
+}
+
+/**
+ * Information about our tag in filter description.
+ */
+function _header_anchors_filter_tips($filter, $format, $long = FALSE) {
+  return 'Description';
+}
+
+/**
+ * Function to replace spaces by the char.
+ */
+function header_anchors_replace_spaces($text, $replace_char = '_') {
+  return str_replace(' ', $replace_char, $text);
+}
+
+/**
+ * Prepare element to be anchors link.
+ */
+function header_anchors_prepare_link($element, $url) {
+  return str_replace('@anchor', $url, $element);
+}
